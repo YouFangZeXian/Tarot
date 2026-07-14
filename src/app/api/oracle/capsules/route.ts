@@ -6,6 +6,7 @@ import {
   upsertById,
 } from "@/lib/server/oracle-file-database";
 import type { TimeCapsuleEntry } from "@/lib/time-capsule";
+import { getClientCollectionName } from "@/lib/server/oracle-client-context";
 
 export const runtime = "nodejs";
 
@@ -45,8 +46,13 @@ function isPendingCapsule(entry: TimeCapsuleEntry, now = new Date()) {
   return !Number.isNaN(target.getTime()) && target.getTime() <= now.getTime();
 }
 
-export async function GET() {
-  const records = await readServerCollection<TimeCapsuleEntry>(CAPSULES_COLLECTION);
+export async function GET(request: Request) {
+  const collectionName = getClientCollectionName(request, CAPSULES_COLLECTION);
+  if (!collectionName) {
+    return NextResponse.json({ error: "Missing or invalid oracle client id." }, { status: 400 });
+  }
+
+  const records = await readServerCollection<TimeCapsuleEntry>(collectionName);
   const sortedRecords = sortByCreatedAtDesc(records).slice(0, MAX_CAPSULE_RECORDS);
 
   return NextResponse.json({
@@ -60,6 +66,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const collectionName = getClientCollectionName(request, CAPSULES_COLLECTION);
+  if (!collectionName) {
+    return NextResponse.json({ error: "Missing or invalid oracle client id." }, { status: 400 });
+  }
+
   const payload = (await request.json().catch(() => null)) as unknown;
   const record = isRecord(payload) && "record" in payload ? payload.record : payload;
 
@@ -67,7 +78,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid time capsule payload." }, { status: 400 });
   }
 
-  const records = await updateServerCollection<TimeCapsuleEntry>(CAPSULES_COLLECTION, (current) =>
+  const records = await updateServerCollection<TimeCapsuleEntry>(collectionName, (current) =>
     upsertById(current, record, MAX_CAPSULE_RECORDS),
   );
 

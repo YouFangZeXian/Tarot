@@ -1,4 +1,5 @@
 import type { MonthlyReportSnapshot } from "@/lib/monthly-report";
+import { getOracleClientHeaders } from "@/lib/oracle-client-id";
 
 type ServerMonthlyReportsResponse = {
   records?: MonthlyReportSnapshot[];
@@ -29,7 +30,7 @@ export function mergeMonthlyReports(
 export async function fetchServerMonthlyReports() {
   const response = await fetch("/api/oracle/monthly-reports", {
     method: "GET",
-    headers: { Accept: "application/json" },
+    headers: { Accept: "application/json", ...getOracleClientHeaders() },
   });
 
   if (!response.ok) {
@@ -43,7 +44,7 @@ export async function fetchServerMonthlyReports() {
 export async function persistServerMonthlyReport(record: MonthlyReportSnapshot) {
   const response = await fetch("/api/oracle/monthly-reports", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getOracleClientHeaders() },
     body: JSON.stringify({ record }),
   });
 

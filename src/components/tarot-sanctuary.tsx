@@ -337,13 +337,21 @@ export function TarotSanctuary() {
     const syncReadings = async () => {
       try {
         const serverRecords = await fetchServerReadings();
-        if (cancelled || !serverRecords.length) return;
+        if (cancelled) return;
+        const localRecords = oracleDataService.readings.load();
 
-        setReadingHistory((current) => {
-          const merged = mergeReadingRecords(current, serverRecords, 80);
-          oracleDataService.readings.save(merged);
-          return merged;
-        });
+        if (serverRecords.length) {
+          setReadingHistory((current) => {
+            const merged = mergeReadingRecords(current, serverRecords, 80);
+            oracleDataService.readings.save(merged);
+            return merged;
+          });
+        }
+
+        const serverIds = new Set(serverRecords.map((record) => record.id));
+        localRecords
+          .filter((record) => !serverIds.has(record.id))
+          .forEach((record) => void persistWithRetry({ entity: "reading", record }));
       } catch {
         // Server-side persistence is an enhancement; local records remain the source of truth if it is unavailable.
       }
@@ -352,13 +360,21 @@ export function TarotSanctuary() {
     const syncDailyRecords = async () => {
       try {
         const serverRecords = await fetchServerDailyRecords();
-        if (cancelled || !serverRecords.length) return;
+        if (cancelled) return;
+        const localRecords = oracleDataService.daily.load();
 
-        setDailyRecords((current) => {
-          const merged = mergeDailyRecords(current, serverRecords, 80);
-          oracleDataService.daily.save(merged);
-          return merged;
-        });
+        if (serverRecords.length) {
+          setDailyRecords((current) => {
+            const merged = mergeDailyRecords(current, serverRecords, 80);
+            oracleDataService.daily.save(merged);
+            return merged;
+          });
+        }
+
+        const serverIds = new Set(serverRecords.map((record) => record.id));
+        localRecords
+          .filter((record) => !serverIds.has(record.id))
+          .forEach((record) => void persistWithRetry({ entity: "daily", record }));
       } catch {
         // Daily records remain local-first if the server endpoint is temporarily unavailable.
       }
@@ -367,13 +383,21 @@ export function TarotSanctuary() {
     const syncDreamEntries = async () => {
       try {
         const serverRecords = await fetchServerDreamEntries();
-        if (cancelled || !serverRecords.length) return;
+        if (cancelled) return;
+        const localRecords = oracleDataService.dreams.load();
 
-        setDreamEntries((current) => {
-          const merged = mergeDreamEntries(current, serverRecords, 24);
-          oracleDataService.dreams.save(merged);
-          return merged;
-        });
+        if (serverRecords.length) {
+          setDreamEntries((current) => {
+            const merged = mergeDreamEntries(current, serverRecords, 24);
+            oracleDataService.dreams.save(merged);
+            return merged;
+          });
+        }
+
+        const serverIds = new Set(serverRecords.map((record) => record.id));
+        localRecords
+          .filter((record) => !serverIds.has(record.id))
+          .forEach((record) => void persistWithRetry({ entity: "dream", record }));
       } catch {
         // Dream journal stays local-first if the server endpoint is temporarily unavailable.
       }
@@ -382,13 +406,21 @@ export function TarotSanctuary() {
     const syncTimeCapsules = async () => {
       try {
         const serverRecords = await fetchServerTimeCapsules();
-        if (cancelled || !serverRecords.length) return;
+        if (cancelled) return;
+        const localRecords = oracleDataService.capsules.load();
 
-        setTimeCapsules((current) => {
-          const merged = mergeTimeCapsules(current, serverRecords, 24);
-          oracleDataService.capsules.save(merged);
-          return merged;
-        });
+        if (serverRecords.length) {
+          setTimeCapsules((current) => {
+            const merged = mergeTimeCapsules(current, serverRecords, 24);
+            oracleDataService.capsules.save(merged);
+            return merged;
+          });
+        }
+
+        const serverIds = new Set(serverRecords.map((record) => record.id));
+        localRecords
+          .filter((record) => !serverIds.has(record.id))
+          .forEach((record) => void persistWithRetry({ entity: "capsule", record }));
       } catch {
         // Time capsules remain local-first if the server endpoint is temporarily unavailable.
       }
@@ -397,13 +429,21 @@ export function TarotSanctuary() {
     const syncMonthlyReports = async () => {
       try {
         const serverRecords = await fetchServerMonthlyReports();
-        if (cancelled || !serverRecords.length) return;
+        if (cancelled) return;
+        const localRecords = oracleDataService.monthlyReports.load();
 
-        setMonthlyReports((current) => {
-          const merged = mergeMonthlyReports(current, serverRecords, 24);
-          oracleDataService.monthlyReports.save(merged);
-          return merged;
-        });
+        if (serverRecords.length) {
+          setMonthlyReports((current) => {
+            const merged = mergeMonthlyReports(current, serverRecords, 24);
+            oracleDataService.monthlyReports.save(merged);
+            return merged;
+          });
+        }
+
+        const serverIds = new Set(serverRecords.map((record) => record.id));
+        localRecords
+          .filter((record) => !serverIds.has(record.id))
+          .forEach((record) => void persistWithRetry({ entity: "monthlyReport", record }));
       } catch {
         // Monthly reports remain local-first if the server endpoint is temporarily unavailable.
       }

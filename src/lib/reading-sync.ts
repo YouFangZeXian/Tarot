@@ -1,4 +1,5 @@
 import type { 阅读记录 } from "@/lib/reading-history";
+import { getOracleClientHeaders } from "@/lib/oracle-client-id";
 
 type ServerReadingsResponse = {
   records?: 阅读记录[];
@@ -25,7 +26,7 @@ export function mergeReadingRecords(localRecords: 阅读记录[], serverRecords:
 export async function fetchServerReadings() {
   const response = await fetch("/api/oracle/readings", {
     method: "GET",
-    headers: { Accept: "application/json" },
+    headers: { Accept: "application/json", ...getOracleClientHeaders() },
   });
 
   if (!response.ok) {
@@ -39,7 +40,7 @@ export async function fetchServerReadings() {
 export async function persistServerReading(record: 阅读记录) {
   const response = await fetch("/api/oracle/readings", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getOracleClientHeaders() },
     body: JSON.stringify({ record }),
   });
 

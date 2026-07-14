@@ -6,6 +6,7 @@ import {
   upsertById,
 } from "@/lib/server/oracle-file-database";
 import type { MonthlyReportSnapshot } from "@/lib/monthly-report";
+import { getClientCollectionName } from "@/lib/server/oracle-client-context";
 
 export const runtime = "nodejs";
 
@@ -32,8 +33,13 @@ function isMonthlyReportSnapshot(value: unknown): value is MonthlyReportSnapshot
   );
 }
 
-export async function GET() {
-  const records = await readServerCollection<MonthlyReportSnapshot>(MONTHLY_REPORTS_COLLECTION);
+export async function GET(request: Request) {
+  const collectionName = getClientCollectionName(request, MONTHLY_REPORTS_COLLECTION);
+  if (!collectionName) {
+    return NextResponse.json({ error: "Missing or invalid oracle client id." }, { status: 400 });
+  }
+
+  const records = await readServerCollection<MonthlyReportSnapshot>(collectionName);
   const sortedRecords = sortByCreatedAtDesc(records).slice(0, MAX_MONTHLY_REPORTS);
 
   return NextResponse.json({
@@ -47,6 +53,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const collectionName = getClientCollectionName(request, MONTHLY_REPORTS_COLLECTION);
+  if (!collectionName) {
+    return NextResponse.json({ error: "Missing or invalid oracle client id." }, { status: 400 });
+  }
+
   const payload = (await request.json().catch(() => null)) as unknown;
   const record = isRecord(payload) && "record" in payload ? payload.record : payload;
 
@@ -54,7 +65,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid monthly report payload." }, { status: 400 });
   }
 
-  const records = await updateServerCollection<MonthlyReportSnapshot>(MONTHLY_REPORTS_COLLECTION, (current) =>
+  const records = await updateServerCollection<MonthlyReportSnapshot>(collectionName, (current) =>
     upsertById(current, record, MAX_MONTHLY_REPORTS),
   );
 

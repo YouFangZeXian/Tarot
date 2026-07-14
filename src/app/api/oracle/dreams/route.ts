@@ -6,6 +6,7 @@ import {
   upsertById,
 } from "@/lib/server/oracle-file-database";
 import type { DreamJournalEntry, DreamMood } from "@/lib/dream-journal";
+import { getClientCollectionName } from "@/lib/server/oracle-client-context";
 
 export const runtime = "nodejs";
 
@@ -43,8 +44,13 @@ function isDreamJournalEntry(value: unknown): value is DreamJournalEntry {
   );
 }
 
-export async function GET() {
-  const records = await readServerCollection<DreamJournalEntry>(DREAMS_COLLECTION);
+export async function GET(request: Request) {
+  const collectionName = getClientCollectionName(request, DREAMS_COLLECTION);
+  if (!collectionName) {
+    return NextResponse.json({ error: "Missing or invalid oracle client id." }, { status: 400 });
+  }
+
+  const records = await readServerCollection<DreamJournalEntry>(collectionName);
   const sortedRecords = sortByCreatedAtDesc(records).slice(0, MAX_DREAM_RECORDS);
 
   return NextResponse.json({
@@ -57,6 +63,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const collectionName = getClientCollectionName(request, DREAMS_COLLECTION);
+  if (!collectionName) {
+    return NextResponse.json({ error: "Missing or invalid oracle client id." }, { status: 400 });
+  }
+
   const payload = (await request.json().catch(() => null)) as unknown;
   const record = isRecord(payload) && "record" in payload ? payload.record : payload;
 
@@ -64,7 +75,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid dream journal payload." }, { status: 400 });
   }
 
-  const records = await updateServerCollection<DreamJournalEntry>(DREAMS_COLLECTION, (current) =>
+  const records = await updateServerCollection<DreamJournalEntry>(collectionName, (current) =>
     upsertById(current, record, MAX_DREAM_RECORDS),
   );
 

@@ -1,4 +1,5 @@
 import type { DreamJournalEntry } from "@/lib/dream-journal";
+import { getOracleClientHeaders } from "@/lib/oracle-client-id";
 
 type ServerDreamsResponse = {
   records?: DreamJournalEntry[];
@@ -25,7 +26,7 @@ export function mergeDreamEntries(localRecords: DreamJournalEntry[], serverRecor
 export async function fetchServerDreamEntries() {
   const response = await fetch("/api/oracle/dreams", {
     method: "GET",
-    headers: { Accept: "application/json" },
+    headers: { Accept: "application/json", ...getOracleClientHeaders() },
   });
 
   if (!response.ok) {
@@ -39,7 +40,7 @@ export async function fetchServerDreamEntries() {
 export async function persistServerDreamEntry(record: DreamJournalEntry) {
   const response = await fetch("/api/oracle/dreams", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getOracleClientHeaders() },
     body: JSON.stringify({ record }),
   });
 

@@ -1,4 +1,5 @@
 import type { TimeCapsuleEntry } from "@/lib/time-capsule";
+import { getOracleClientHeaders } from "@/lib/oracle-client-id";
 
 type ServerCapsulesResponse = {
   records?: TimeCapsuleEntry[];
@@ -29,7 +30,7 @@ export function mergeTimeCapsules(localRecords: TimeCapsuleEntry[], serverRecord
 export async function fetchServerTimeCapsules() {
   const response = await fetch("/api/oracle/capsules", {
     method: "GET",
-    headers: { Accept: "application/json" },
+    headers: { Accept: "application/json", ...getOracleClientHeaders() },
   });
 
   if (!response.ok) {
@@ -43,7 +44,7 @@ export async function fetchServerTimeCapsules() {
 export async function persistServerTimeCapsule(record: TimeCapsuleEntry) {
   const response = await fetch("/api/oracle/capsules", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getOracleClientHeaders() },
     body: JSON.stringify({ record }),
   });
 

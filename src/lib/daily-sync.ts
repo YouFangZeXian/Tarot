@@ -1,4 +1,5 @@
 import type { 每日记录 } from "@/lib/daily-record";
+import { getOracleClientHeaders } from "@/lib/oracle-client-id";
 
 type ServerDailyResponse = {
   records?: 每日记录[];
@@ -31,7 +32,7 @@ export function mergeDailyRecords(localRecords: 每日记录[], serverRecords: �
 export async function fetchServerDailyRecords() {
   const response = await fetch("/api/oracle/daily", {
     method: "GET",
-    headers: { Accept: "application/json" },
+    headers: { Accept: "application/json", ...getOracleClientHeaders() },
   });
 
   if (!response.ok) {
@@ -45,7 +46,7 @@ export async function fetchServerDailyRecords() {
 export async function persistServerDailyRecord(record: 每日记录) {
   const response = await fetch("/api/oracle/daily", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getOracleClientHeaders() },
     body: JSON.stringify({ record }),
   });
 

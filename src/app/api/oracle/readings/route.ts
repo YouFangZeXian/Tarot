@@ -6,6 +6,7 @@ import {
   upsertById,
 } from "@/lib/server/oracle-file-database";
 import type { 阅读记录 } from "@/lib/reading-history";
+import { getClientCollectionName } from "@/lib/server/oracle-client-context";
 
 export const runtime = "nodejs";
 
@@ -46,8 +47,13 @@ function isReadingRecord(value: unknown): value is 阅读记录 {
   );
 }
 
-export async function GET() {
-  const records = await readServerCollection<阅读记录>(READINGS_COLLECTION);
+export async function GET(request: Request) {
+  const collectionName = getClientCollectionName(request, READINGS_COLLECTION);
+  if (!collectionName) {
+    return NextResponse.json({ error: "Missing or invalid oracle client id." }, { status: 400 });
+  }
+
+  const records = await readServerCollection<阅读记录>(collectionName);
   const sortedRecords = sortByCreatedAtDesc(records).slice(0, MAX_READING_RECORDS);
 
   return NextResponse.json({
@@ -60,6 +66,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const collectionName = getClientCollectionName(request, READINGS_COLLECTION);
+  if (!collectionName) {
+    return NextResponse.json({ error: "Missing or invalid oracle client id." }, { status: 400 });
+  }
+
   const payload = (await request.json().catch(() => null)) as unknown;
   const record = isRecord(payload) && "record" in payload ? payload.record : payload;
 
@@ -67,7 +78,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid reading record payload." }, { status: 400 });
   }
 
-  const records = await updateServerCollection<阅读记录>(READINGS_COLLECTION, (current) =>
+  const records = await updateServerCollection<阅读记录>(collectionName, (current) =>
     upsertById(current, record, MAX_READING_RECORDS),
   );
 
