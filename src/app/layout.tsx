@@ -1,17 +1,22 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Manrope } from "next/font/google";
+import localFont from "next/font/local";
 import Script from "next/script";
 import "./globals.css";
 
-const uiSans = Manrope({
+const uiSans = localFont({
+  src: "./fonts/manrope-latin.woff2",
   variable: "--font-ui-sans",
-  subsets: ["latin"],
+  display: "swap",
+  style: "normal",
+  weight: "200 800",
 });
 
-const editorialSerif = Cormorant_Garamond({
+const editorialSerif = localFont({
+  src: "./fonts/cormorant-garamond-latin.woff2",
   variable: "--font-editorial-serif",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  style: "normal",
+  weight: "400 700",
 });
 
 export const metadata: Metadata = {
@@ -26,7 +31,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="zh-CN"
       suppressHydrationWarning
       className={`${uiSans.variable} ${editorialSerif.variable} h-full antialiased`}
     >

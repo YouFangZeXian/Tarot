@@ -5,7 +5,7 @@ const DEFAULT_DATA_DIR = ".oracle-data";
 const writeQueues = new Map<string, Promise<unknown>>();
 
 function getDataRoot() {
-  return process.env.ORACLE_DATA_DIR || path.join(process.cwd(), DEFAULT_DATA_DIR);
+  return process.env.ORACLE_DATA_DIR || path.join(/*turbopackIgnore: true*/ process.cwd(), DEFAULT_DATA_DIR);
 }
 
 function getCollectionPath(collectionName: string) {

@@ -60,11 +60,20 @@ import {
 } from "@/lib/daily-record";
 import { oracleDataService } from "@/lib/oracle-data-service";
 import { OracleSidebarShell } from "@/components/oracle-sidebar-shell";
-import { fetchServerDailyRecords, mergeDailyRecords, persistServerDailyRecord } from "@/lib/daily-sync";
-import { fetchServerDreamEntries, mergeDreamEntries, persistServerDreamEntry } from "@/lib/dream-sync";
-import { fetchServerMonthlyReports, mergeMonthlyReports, persistServerMonthlyReport } from "@/lib/monthly-report-sync";
-import { fetchServerReadings, mergeReadingRecords, persistServerReading } from "@/lib/reading-sync";
-import { fetchServerTimeCapsules, mergeTimeCapsules, persistServerTimeCapsule } from "@/lib/time-capsule-sync";
+import { fetchServerDailyRecords, mergeDailyRecords } from "@/lib/daily-sync";
+import { fetchServerDreamEntries, mergeDreamEntries } from "@/lib/dream-sync";
+import { fetchServerMonthlyReports, mergeMonthlyReports } from "@/lib/monthly-report-sync";
+import { fetchServerReadings, mergeReadingRecords } from "@/lib/reading-sync";
+import { fetchServerTimeCapsules, mergeTimeCapsules } from "@/lib/time-capsule-sync";
+import {
+  flushSyncQueue,
+  formatSyncStateLabel,
+  getServerSyncStateSnapshot,
+  getSyncStateSnapshot,
+  persistWithRetry,
+  startSyncQueue,
+  subscribeSyncState,
+} from "@/lib/sync-queue";
 
 type FlowStep = "landing" | "question" | "spread" | "deck" | "reveal" | "reading";
 type ThemeMode = "light" | "dark";
@@ -169,6 +178,11 @@ const dreamMoods: DreamMood[] = ["朦胧", "平静", "牵挂", "压迫", "惊醒
 
 export function TarotSanctuary() {
   const theme = useSyncExternalStore(subscribeThemePreference, getThemePreference, () => "light");
+  const syncState = useSyncExternalStore(
+    subscribeSyncState,
+    getSyncStateSnapshot,
+    getServerSyncStateSnapshot,
+  );
   const viewportWidth = useViewportWidth();
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("oracle");
   const [step, setStep] = useState<FlowStep>("landing");
@@ -224,6 +238,8 @@ export function TarotSanctuary() {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem("oracle-theme", theme);
   }, [theme]);
+
+  useEffect(() => startSyncQueue(), []);
 
   useEffect(() => {
     if (!textareaRef.current) return;
@@ -313,6 +329,7 @@ export function TarotSanctuary() {
   const recentReadingHistory = useMemo(() => readingHistory.slice(0, 10), [readingHistory]);
   const pendingDailyCount = useMemo(() => 今日待回应数量(dailyRecords), [dailyRecords]);
   const recentDailyRecords = useMemo(() => dailyRecords.slice(0, 8), [dailyRecords]);
+  const syncStatusLabel = formatSyncStateLabel(syncState);
 
   useEffect(() => {
     let cancelled = false;
@@ -437,9 +454,7 @@ export function TarotSanctuary() {
       oracleDataService.readings.save(next);
       return next;
     });
-    void persistServerReading(record).catch(() => {
-      // Keep the reading experience local-first. A later sync pass can retry failed writes.
-    });
+    void persistWithRetry({ entity: "reading", record });
 
     const practicalGuidance = readingSections.find((section) => section.title === "实际建议")?.paragraphs?.[0];
     const dailyRecord = 创建每日记录({
@@ -453,9 +468,7 @@ export function TarotSanctuary() {
       oracleDataService.daily.save(next);
       return next;
     });
-    void persistServerDailyRecord(dailyRecord).catch(() => {
-      // Local-first daily record; later sync can retry once a durable queue exists.
-    });
+    void persistWithRetry({ entity: "daily", record: dailyRecord });
 
     lastSavedReadingSignature.current = signature;
   }, [
@@ -543,9 +556,7 @@ export function TarotSanctuary() {
       oracleDataService.daily.save(next);
       const completedRecord = next.find((entry) => entry.id === dailyId);
       if (completedRecord) {
-        void persistServerDailyRecord(completedRecord).catch(() => {
-          // Completion stays local if the server is unavailable.
-        });
+        void persistWithRetry({ entity: "daily", record: completedRecord });
       }
       return next;
     });
@@ -805,9 +816,7 @@ export function TarotSanctuary() {
     const nextEntries = [entry, ...dreamEntries].slice(0, 12);
     setDreamEntries(nextEntries);
     oracleDataService.dreams.save(nextEntries);
-    void persistServerDreamEntry(entry).catch(() => {
-      // Keep the dream safely local if the server is temporarily unavailable.
-    });
+    void persistWithRetry({ entity: "dream", record: entry });
     setDreamTitle("");
     setDreamText("");
     setDreamMood("朦胧");
@@ -837,9 +846,7 @@ export function TarotSanctuary() {
     const nextEntries = [entry, ...timeCapsules].slice(0, 12);
     setTimeCapsules(nextEntries);
     oracleDataService.capsules.save(nextEntries);
-    void persistServerTimeCapsule(entry).catch(() => {
-      // Keep the capsule safely local if the server is temporarily unavailable.
-    });
+    void persistWithRetry({ entity: "capsule", record: entry });
     setCapsuleTitle("");
     setCapsuleMessage("");
     setCapsuleOpenDate(getDefaultCapsuleDate());
@@ -852,9 +859,7 @@ export function TarotSanctuary() {
     const nextEntries = [snapshot, ...monthlyReports].slice(0, 12);
     setMonthlyReports(nextEntries);
     oracleDataService.monthlyReports.save(nextEntries);
-    void persistServerMonthlyReport(snapshot).catch(() => {
-      // Keep the report safely local if the server is temporarily unavailable.
-    });
+    void persistWithRetry({ entity: "monthlyReport", record: snapshot });
     setReportSaveFeedback("已收进本月档案");
     window.setTimeout(() => setReportSaveFeedback("收成本月报告"), 1800);
   };
@@ -865,9 +870,7 @@ export function TarotSanctuary() {
     oracleDataService.capsules.save(nextEntries);
     const openedCapsule = nextEntries.find((entry) => entry.id === capsuleId);
     if (openedCapsule) {
-      void persistServerTimeCapsule(openedCapsule).catch(() => {
-        // Opening state stays local if the server is temporarily unavailable.
-      });
+      void persistWithRetry({ entity: "capsule", record: openedCapsule });
     }
   };
 
@@ -877,9 +880,7 @@ export function TarotSanctuary() {
     oracleDataService.capsules.save(nextEntries);
     const dismissedCapsule = nextEntries.find((entry) => entry.id === capsuleId);
     if (dismissedCapsule) {
-      void persistServerTimeCapsule(dismissedCapsule).catch(() => {
-        // Reminder dismissal stays local if the server is temporarily unavailable.
-      });
+      void persistWithRetry({ entity: "capsule", record: dismissedCapsule });
     }
   };
 
@@ -958,6 +959,8 @@ export function TarotSanctuary() {
               onOpenReport={handleSidebarReport}
               pendingDailyCount={pendingDailyCount}
               dueCapsuleCount={dueTimeCapsules.length}
+              pendingSyncCount={syncState.pendingCount}
+              syncLabel={syncStatusLabel}
               onOpenSettings={() => {
                 setIsSettingsOpen(true);
                 setIsSidebarOpen(false);
@@ -988,6 +991,8 @@ export function TarotSanctuary() {
               onOpenReport={handleSidebarReport}
               pendingDailyCount={pendingDailyCount}
               dueCapsuleCount={dueTimeCapsules.length}
+              pendingSyncCount={syncState.pendingCount}
+              syncLabel={syncStatusLabel}
               onOpenSettings={() => setIsSettingsOpen(true)}
               onOpenMessages={() => setIsMessagesOpen(true)}
               onExit={handleExitExperience}
@@ -2369,9 +2374,37 @@ export function TarotSanctuary() {
               </div>
 
               <div className="rounded-[1.2rem] border border-[var(--line)] bg-[color:var(--panel-strong)] p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.26em] text-[var(--muted)]">档案同步</p>
+                    <p className="mt-3 text-sm text-[var(--foreground)]">{syncStatusLabel}</p>
+                    <p className="mt-1 text-xs leading-6 text-[var(--muted)]">
+                      {syncState.lastSuccessAt
+                        ? `最近完成：${new Date(syncState.lastSuccessAt).toLocaleString("zh-CN", { hour12: false })}`
+                        : "尚未完成首次服务器同步"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={syncState.phase === "syncing"}
+                    onClick={() => void flushSyncQueue()}
+                    className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[color:var(--panel)] px-4 py-2 text-xs text-[var(--foreground)] disabled:cursor-wait disabled:opacity-55"
+                  >
+                    <RefreshCcw className={`h-3.5 w-3.5 ${syncState.phase === "syncing" ? "animate-spin" : ""}`} />
+                    {syncState.phase === "syncing" ? "同步中" : "立即重试"}
+                  </button>
+                </div>
+                {syncState.lastError ? (
+                  <p className="mt-3 rounded-[0.9rem] bg-[rgba(214,168,95,0.09)] px-3 py-2 text-xs leading-6 text-[var(--muted)]">
+                    本地档案仍然安全，服务器恢复后会自动补传。
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="rounded-[1.2rem] border border-[var(--line)] bg-[color:var(--panel-strong)] p-4">
                 <p className="text-xs uppercase tracking-[0.26em] text-[var(--muted)]">说明</p>
                 <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-                  现在的扩展功能都先保存在本地浏览器里。等你后面决定要不要做登录和云端同步，我们再把这些内容接到长期记忆系统中。
+                  记录会先写入当前浏览器，再同步到现有服务器。即使网络暂时中断，也会保留在待同步队列中，恢复连接后自动补传；账号与多设备隔离仍属于下一阶段。
                 </p>
               </div>
             </div>

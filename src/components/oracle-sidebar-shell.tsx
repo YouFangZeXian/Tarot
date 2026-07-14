@@ -36,6 +36,8 @@ type SidebarProps = {
   onOpenReport: () => void;
   pendingDailyCount: number;
   dueCapsuleCount: number;
+  pendingSyncCount: number;
+  syncLabel: string;
   onOpenSettings: () => void;
   onOpenMessages: () => void;
   onExit: () => void;
@@ -66,6 +68,8 @@ export function OracleSidebarShell({
   onOpenReport,
   pendingDailyCount,
   dueCapsuleCount,
+  pendingSyncCount,
+  syncLabel,
   onOpenSettings,
   onOpenMessages,
   onExit,
@@ -199,7 +203,7 @@ export function OracleSidebarShell({
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm text-[var(--foreground)]">匿名旅人</p>
-            <p className="truncate text-xs text-[var(--muted)]">本地体验中 · 未连接账号</p>
+            <p className="truncate text-xs text-[var(--muted)]">未连接账号 · {syncLabel}</p>
           </div>
         </div>
 
@@ -207,10 +211,13 @@ export function OracleSidebarShell({
           <button
             type="button"
             onClick={onOpenSettings}
-            className="flex h-10 flex-1 items-center justify-center rounded-full border border-[var(--line)] bg-[color:var(--panel-strong)] text-[var(--foreground)]"
+            className="relative flex h-10 flex-1 items-center justify-center rounded-full border border-[var(--line)] bg-[color:var(--panel-strong)] text-[var(--foreground)]"
             aria-label="设置"
-            title="设置"
+            title={syncLabel}
           >
+            {pendingSyncCount > 0 ? (
+              <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[var(--gold)]" />
+            ) : null}
             <Settings2 className="h-4 w-4" />
           </button>
           <button
