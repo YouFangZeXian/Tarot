@@ -1,5 +1,14 @@
 "use client";
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  type ChangeEvent,
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Archive,
@@ -9,6 +18,7 @@ import {
   ChevronDown,
   Check,
   Copy,
+  Download,
   Home,
   LoaderCircle,
   LogOut,
@@ -23,6 +33,7 @@ import {
   Settings2,
   Sparkles,
   SunMedium,
+  Upload,
   UserRound,
   X,
 } from "lucide-react";
@@ -59,6 +70,7 @@ import {
   type 每日记录,
 } from "@/lib/daily-record";
 import { oracleDataService } from "@/lib/oracle-data-service";
+import { createOracleBackup, parseOracleBackup } from "@/lib/oracle-backup";
 import { OracleSidebarShell } from "@/components/oracle-sidebar-shell";
 import { fetchServerDailyRecords, mergeDailyRecords } from "@/lib/daily-sync";
 import { fetchServerDreamEntries, mergeDreamEntries } from "@/lib/dream-sync";
@@ -228,7 +240,9 @@ export function TarotSanctuary() {
   const [isReportPanelOpen, setIsReportPanelOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isMessagesOpen, setIsMessagesOpen] = useState(false);
+  const [backupFeedback, setBackupFeedback] = useState("可将全部档案保存到本地文件。");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const backupInputRef = useRef<HTMLInputElement | null>(null);
   const revealTimers = useRef<number[]>([]);
   const ringSpinRaf = useRef<number | null>(null);
   const ringSpinState = useRef<{ direction: 1 | -1; lastTime: number | null } | null>(null);
@@ -921,6 +935,86 @@ export function TarotSanctuary() {
     const dismissedCapsule = nextEntries.find((entry) => entry.id === capsuleId);
     if (dismissedCapsule) {
       void persistWithRetry({ entity: "capsule", record: dismissedCapsule });
+    }
+  };
+
+  const handleExportArchive = () => {
+    try {
+      const backup = createOracleBackup(oracleDataService.loadSnapshot());
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `神谕室档案-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      setBackupFeedback("档案已经整理完成并开始下载。");
+    } catch {
+      setBackupFeedback("档案导出失败，请稍后再试。");
+    }
+  };
+
+  const handleImportArchive = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    try {
+      if (file.size > 5_000_000) {
+        throw new Error("Archive is too large.");
+      }
+
+      const backup = parseOracleBackup(await file.text());
+      const nextReadings = mergeReadingRecords(readingHistory, backup.data.readings, 80);
+      const nextDaily = mergeDailyRecords(dailyRecords, backup.data.daily, 80);
+      const nextDreams = mergeDreamEntries(dreamEntries, backup.data.dreams, 24);
+      const nextCapsules = mergeTimeCapsules(timeCapsules, backup.data.capsules, 24);
+      const nextReports = mergeMonthlyReports(monthlyReports, backup.data.monthlyReports, 24);
+
+      oracleDataService.readings.save(nextReadings);
+      oracleDataService.daily.save(nextDaily);
+      oracleDataService.dreams.save(nextDreams);
+      oracleDataService.capsules.save(nextCapsules);
+      oracleDataService.monthlyReports.save(nextReports);
+      setReadingHistory(nextReadings);
+      setDailyRecords(nextDaily);
+      setDreamEntries(nextDreams);
+      setTimeCapsules(nextCapsules);
+      setMonthlyReports(nextReports);
+
+      const importedReadingIds = new Set(backup.data.readings.map((record) => record.id));
+      const importedDailyIds = new Set(backup.data.daily.map((record) => record.id));
+      const importedDreamIds = new Set(backup.data.dreams.map((record) => record.id));
+      const importedCapsuleIds = new Set(backup.data.capsules.map((record) => record.id));
+      const importedReportIds = new Set(backup.data.monthlyReports.map((record) => record.id));
+
+      nextReadings
+        .filter((record) => importedReadingIds.has(record.id))
+        .forEach((record) => void persistWithRetry({ entity: "reading", record }));
+      nextDaily
+        .filter((record) => importedDailyIds.has(record.id))
+        .forEach((record) => void persistWithRetry({ entity: "daily", record }));
+      nextDreams
+        .filter((record) => importedDreamIds.has(record.id))
+        .forEach((record) => void persistWithRetry({ entity: "dream", record }));
+      nextCapsules
+        .filter((record) => importedCapsuleIds.has(record.id))
+        .forEach((record) => void persistWithRetry({ entity: "capsule", record }));
+      nextReports
+        .filter((record) => importedReportIds.has(record.id))
+        .forEach((record) => void persistWithRetry({ entity: "monthlyReport", record }));
+
+      const importedCount =
+        backup.data.readings.length +
+        backup.data.daily.length +
+        backup.data.dreams.length +
+        backup.data.capsules.length +
+        backup.data.monthlyReports.length;
+      setBackupFeedback(`已读取 ${importedCount} 条档案内容，并与当前记录完成合并。`);
+    } catch {
+      setBackupFeedback("无法读取这个文件，请确认它是由神谕室导出的档案。");
     }
   };
 
@@ -2439,6 +2533,40 @@ export function TarotSanctuary() {
                     本地档案仍然安全，服务器恢复后会自动补传。
                   </p>
                 ) : null}
+              </div>
+
+              <div className="rounded-[1.2rem] border border-[var(--line)] bg-[color:var(--panel-strong)] p-4">
+                <p className="text-xs uppercase tracking-[0.26em] text-[var(--muted)]">档案备份</p>
+                <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
+                  将这间神谕室里的全部记录收成一个文件，或把另一台设备导出的档案合并到这里。导入不会覆盖较新的同名记录。
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleExportArchive}
+                    className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[color:var(--panel)] px-4 py-2 text-xs text-[var(--foreground)]"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    导出全部档案
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => backupInputRef.current?.click()}
+                    className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[color:var(--panel)] px-4 py-2 text-xs text-[var(--foreground)]"
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    导入档案文件
+                  </button>
+                  <input
+                    ref={backupInputRef}
+                    type="file"
+                    accept="application/json,.json"
+                    onChange={handleImportArchive}
+                    className="hidden"
+                    aria-label="选择要导入的神谕室档案"
+                  />
+                </div>
+                <p className="mt-3 text-xs leading-6 text-[var(--muted)]">{backupFeedback}</p>
               </div>
 
               <div className="rounded-[1.2rem] border border-[var(--line)] bg-[color:var(--panel-strong)] p-4">
